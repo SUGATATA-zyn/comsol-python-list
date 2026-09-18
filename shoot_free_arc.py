@@ -40,7 +40,7 @@ WSL 闭环外翻滚动 · 步骤 2 规范算例:轴对称充压段打靶  (shoot
 自由段平衡(以参考弧长 S 积分,内压 p 沿腔侧外法向;符号约定已在 §3.1 校验):
       dr/dS   = lam1 cos(psi)
       dz/dS   = lam1 sin(psi)
-      dpsi/dS = lam1*(-p - N_phi*sin(psi)/r)/N_s
+      dpsi/dS = lam1*(+p - N_phi*sin(psi)/r)/N_s
       dN_s/dS = -lam1*(N_s - N_phi)*cos(psi)/r
 贴壁段: 膜中面压贴壁面(刚性壁半径 R_w=62 mm -> 中面接触半径 R_c=R_w-t/2,
   切线 psi=pi/2); N_s 常数; 接触压力 q(S)=p+N_phi/R_c。
@@ -50,18 +50,19 @@ WSL 闭环外翻滚动 · 步骤 2 规范算例:轴对称充压段打靶  (shoot
   闭端 z=0、psi=-pi/2 与剥离点 q=0 三个条件; 缺的自由度正是"剥离角/剥离几何"。
   COMSOL 中贴壁段切向锚定(摩擦+CZM)与剥离处弯曲边界层补足该自由度, 使 s_c 成
   为由加载历史决定的量。本代码把 **s_c(贴壁段材料长度)作为输入/扫描参数**,
-  未知量 x=(N_s0, psi_c), 条件 z(S=L0/2)=0 与 cos(psi(S=L0/2))=0。
-  **注意(v7 遗留待标定)**: 参考环起点的材料位置、贴壁段在环上的材料区间、以
-  及闭合端(镜像对称)的材料位置, 需要由 COMSOL para=1 的接触弧/轮廓读数给定
-  (推导笔记 §3.6 协议第 1 步)。本文件只按指南修正"参考几何形状/参数"; 半环
-  起终点映射保持通用接口, 数值对照前请先按实测 s_c 与贴壁区间校对。
+  未知量 x=(N_s0, psi_c), 条件 z(S=L0/2)=0 与
+  wrap_to_pi(psi(S=L0/2)-3*pi/2)=0。
+  COMSOL para=1 材料坐标初步标定: 全局参考环 S=0 保持在左壁下端, 但半环 ODE
+  使用独立的局部材料坐标 S_hat。S_hat=0 是右壁中面 z=0 的材料点, 并沿上半环
+  方向增加; 因此贴壁段 [0,s_c] 与其真实参考材料区间一致。局部到全局映射由
+  _SEG 中 tag='R' 的右壁段自动导出, 不改变全局参考几何。
 
-  数值诊断: 在 (Ns0, psi_c) 平面上残差 r=(z_end, cos_end) 呈**近平行双峡谷**
-  结构——z_end=0 与 cos_end=0 两条零曲线在相关参数域内接近但通常不相交, 因此
+  数值诊断: 在 (Ns0, psi_c) 平面上残差 r=(z_end, angle_res) 呈**近平行双峡谷**
+  结构——z_end=0 与 angle_res=0 两条零曲线在相关参数域内接近但通常不相交, 因此
   对给定 (p, s_c) **精确纯膜闭解往往不存在**, 只存在"最小残差准闭解"(峡谷
   底)。峡谷间距即"纯膜定解缺掉的那个自由度"的数值体现: 真实结构中由弯曲边界
   层/摩擦锚定/CZM 闭合。v7 求解器因此输出两类结果并**如实标注残差**:
-    * 精确闭解: |z_end|,|cos_end| 均 ~1e-9 (rare, 需 (p,s_c) 恰在交点);
+    * 精确闭解: |z_end|,|angle_res| 均 ~1e-9 (rare, 需 (p,s_c) 恰在交点);
     * 准闭解(默认): 峡谷底最优点, 逐点打印残差, 供与 COMSOL 构型对照。
 
 单位:SI。运行示例:
@@ -93,6 +94,17 @@ D_RZ     = D_45/math.sqrt(2.0)       # 斜线在 r/z 向投影 = 15 mm
 # ---- 刚性约束壁(几何指南 §11: 右侧矩形域左边界) ----
 RW = 62.0e-3        # m  刚性圆柱壁(约束壁)半径, 膜外右侧轮廓初始距壁 1 mm
 RC = RW - H0/2.0    # m  贴壁时膜中面接触半径 = 61.5 mm
+
+# ---- COMSOL para=1 对照标定值(仅记录当前标定, 不改变 CLI 通用扫描默认值) ----
+P_COMSOL_REF = 300.0       # Pa
+# 原始 COMSOL 分离点:
+#   upper peel: 参考 (R,Z)=(61.0,+50.85) mm, 变形后 (r,z)=(62.0,+50.685) mm;
+#   lower peel: 参考 (R,Z)=(61.0,-51.00) mm, 变形后 (r,z)=(61.999,-50.835) mm.
+# raw material contact length = 101.85 mm; 两端 0.15 mm 差异暂视作网格/端点识别
+# 的小非对称。轴对称半环理论取 z=0 对称化后 s_c=50.925 mm。
+LC_MATERIAL_REF = 0.10185  # m, 参考构型材料接触总长
+LC_CURRENT_COMSOL = 0.1017 # m, 当前变形构型总接触长(不用于 s_c 定义)
+SC_COMSOL_REF = 0.050925   # m, 对称化的半环参考材料贴壁长度
 
 # ---- 中面参考环(闭合分段几何, 与 几何模型/wsl_membrane_geom.py 严格一致) ----
 # 主/内轮廓 = 腔侧, 圆弧 R=ARC_R=15 mm(圆心见下); 外轮廓 = 内轮廓沿离腔侧法线偏
@@ -151,6 +163,16 @@ def _build_segments():
 _SEG = _build_segments()
 L0   = _SEG[-1]['s1']            # m  中面参考总弧长 = 349.815 mm(自检)
 
+# 半环局部材料坐标 S_hat: 0 位于右壁中面 z=0, 沿上半环方向增加。
+# 全局 S 在右壁上沿 z=+60 -> -60 mm 递增, 所以局部正方向与全局方向相反。
+_R_WALL_SEG = next(g for g in _SEG if g['kind'] == 'wall' and g['tag'] == 'R')
+S_R_START = _R_WALL_SEG['s0']
+S_CONTACT_CENTER_GLOBAL = S_R_START + 0.5*(_R_WALL_SEG['s1'] - _R_WALL_SEG['s0'])
+
+def local_to_global_S(S_hat):
+    """将局部半环材料坐标 S_hat 映射到全局参考环 S(周期处理)。"""
+    return (S_CONTACT_CENTER_GLOBAL - S_hat) % L0
+
 def ref_r0(S):
     """参考(未变形)构型中材料点 S 的中面半径 r0(S)。S∈[0,L0]; 圆弧用解析式
     r0 = cr + R*cos(th0-(S-s0)/R)(非按弧长线性插值), 保证环上 r0(S) 连续。"""
@@ -184,6 +206,31 @@ def ref_z0(S):
             th = g['th0'] - (S - g['s0'])/g['R']
             return g['cz'] + g['R']*math.sin(th)
     raise ArithmeticError('ref_z0: S=%g 未命中分段' % S)
+
+def ref_r0_local(S_hat):
+    """半环 ODE 的局部材料点参考中面半径 r0(S_hat)。"""
+    return ref_r0(local_to_global_S(S_hat))
+
+def ref_z0_local(S_hat):
+    """半环 ODE 的局部材料点参考轴向坐标 z0(S_hat)。"""
+    return ref_z0(local_to_global_S(S_hat))
+
+def local_material_mapping_check(tol=1.0e-10):
+    """校验 COMSOL para=1 对称化局部材料坐标与全局参考环的对应关系。"""
+    points = {
+        'center': (0.0, R_MID_R, 0.0),
+        'peel': (SC_COMSOL_REF, R_MID_R, SC_COMSOL_REF),
+        'half_end': (L0/2.0, R_MID_L, 0.0),
+    }
+    values = {}
+    for name, (S_hat, expected_r, expected_z) in points.items():
+        r0 = ref_r0_local(S_hat)
+        z0 = ref_z0_local(S_hat)
+        if abs(r0 - expected_r) > tol or abs(z0 - expected_z) > tol:
+            raise AssertionError(
+                'local material mapping %s failed: r0=%g z0=%g' % (name, r0, z0))
+        values[name] = (r0, z0)
+    return values
 
 def geometry_report():
     """几何自检: 打印中面参考环分段端点与周长(理论 L0 应 = 349.815 mm)。
@@ -258,36 +305,45 @@ def inv_lam1(N1t, lam2):
 # ============================================================
 #  2. 半环积分:贴壁段[0,s_c] + 自由段[s_c,L0/2]
 # ============================================================
+def wrap_to_pi(angle):
+    """将角度映射到 [-pi, pi)，用于有方向的终端切线残差。"""
+    return (angle + math.pi) % (2.0*math.pi) - math.pi
+
 def integrate_half(Ns0, s_c, psi_c, p, nstep):
-    """贴壁段 psi=pi/2、N_s=Ns0、r=RW;自由段起点 psi=psi_c、N_s=Ns0/sin(psi_c)。
+    """贴壁段 psi=pi/2、N_s=Ns0、r=RC;自由段起点 psi=psi_c、N_s=Ns0/sin(psi_c)。
     返回轨迹字典;自由段张力非正或越界时抛 ArithmeticError。"""
     Lh = L0/2.0
     sp = math.sin(psi_c)
     if Ns0 <= 1e-9 or not (0.0 <= s_c < Lh*0.999) or sp <= 1e-6:
         raise ArithmeticError('integrate_half: 初值不合法')
+    # psi_c 当前搜索范围在 (pi/2, pi)，故 sin(psi_c)>0；该张力转换的物理
+    # 推导在后续阶段单独复核，本轮保持原式。
     Nsp = Ns0/sp
     h = Lh/nstep
     sc_steps = int(round(s_c/h))
-    S=[0.0]; r=[RW]; z=[0.0]; psi=[math.pi/2.0]; Ns=[Ns0]
-    lam1=[inv_lam1(Ns0, 1.0)]; lam2=[1.0]; q=[0.0]
+    l20 = RC/ref_r0_local(0.0)
+    l10 = inv_lam1(Ns0, l20)
+    _, Np20 = yeoh_N(l10, l20)
+    S=[0.0]; r=[RC]; z=[0.0]; psi=[math.pi/2.0]; Ns=[Ns0]
+    lam1=[l10]; lam2=[l20]; q=[p + Np20/RC]
     for i in range(sc_steps):
         Sp = (i+1)*h
-        l2 = RW/ref_r0(Sp)
+        l2 = RC/ref_r0_local(Sp)
         l1 = inv_lam1(Ns0, l2)
         _, Np2 = yeoh_N(l1, l2)
-        S.append(Sp); r.append(RW); z.append(z[-1]+l1*h)
+        S.append(Sp); r.append(RC); z.append(z[-1]+l1*h)
         psi.append(math.pi/2.0); Ns.append(Ns0)
-        lam1.append(l1); lam2.append(l2); q.append(p + Np2/RW)
+        lam1.append(l1); lam2.append(l2); q.append(p + Np2/RC)
 
     def deriv(Sv, y):
         rr, zz, ps, N1 = y
         if N1 <= 1e-9 or rr <= 0.0:
             raise ArithmeticError('deriv: Ns<=0 或 r<=0')
-        l2 = rr/ref_r0(Sv)
+        l2 = rr/ref_r0_local(Sv)
         l1 = inv_lam1(N1, l2)
         _, N2 = yeoh_N(l1, l2)
         cp = math.cos(ps); sn = math.sin(ps)
-        return (l1*cp, l1*sn, l1*(-p - N2*sn/rr)/N1, -l1*(N1 - N2)*cp/rr)
+        return (l1*cp, l1*sn, l1*(p - N2*sn/rr)/N1, -l1*(N1 - N2)*cp/rr)
 
     def rk4(Sv, y):
         k1 = deriv(Sv, y)
@@ -296,22 +352,29 @@ def integrate_half(Ns0, s_c, psi_c, p, nstep):
         k4 = deriv(Sv+h,   [y[i]+h*k3[i] for i in range(4)])
         return [y[i]+h*(k1[i]+2*k2[i]+2*k3[i]+k4[i])/6.0 for i in range(4)]
 
-    y = [RW, z[-1], psi_c, Nsp]
+    y = [RC, z[-1], psi_c, Nsp]
     for i in range(sc_steps, nstep):
         y = rk4(i*h, y)
         Sv = (i+1)*h
         rr, zz, ps, N1 = y
-        l2 = rr/ref_r0(Sv)
+        l2 = rr/ref_r0_local(Sv)
         l1 = inv_lam1(N1, l2)
         S.append(Sv); r.append(rr); z.append(zz); psi.append(ps)
         Ns.append(N1); lam1.append(l1); lam2.append(l2); q.append(0.0)
+    psi_end = psi[-1]
+    angle_res = wrap_to_pi(psi_end - 3.0*math.pi/2.0)
+    l2_free_start = RC/ref_r0_local(sc_steps*h)
+    l1_free_start = inv_lam1(Nsp, l2_free_start)
     return dict(S=S, r=r, z=z, psi=psi, Ns=Ns, lam1=lam1, lam2=lam2,
                 q=q, sc_steps=sc_steps, sc_eff=sc_steps*h,
-                res=(z[-1], math.cos(psi[-1])), psi_end=psi[-1])
+                res=(z[-1], angle_res), angle_res=angle_res,
+                psi_start=psi[0], psi_c=psi_c, psi_end=psi_end,
+                r_start=r[0], r_peel=r[sc_steps], r_end=r[-1],
+                drds_free_start=l1_free_start*math.cos(psi_c))
 
 # ============================================================
 #  3. 求解器:全域粗采样 -> 多分支选优 -> 逐分支放大抛光
-#     (未知 Ns0, psi_c; 残差 r = (z_end, cos_end))
+#     (未知 Ns0, psi_c; 残差 r = (z_end, angle_res))
 # ============================================================
 def _safe_res(Ns0, psi_c, s_c, p, nstep, cache):
     key = (round(Ns0, 11), round(psi_c, 11))
@@ -417,7 +480,10 @@ def solve_fixed_sc(s_c, p, nstep, prev=None,
       exact=True 当残差达到 ~1e-9(精确纯膜闭解); 否则 exact=False, res 为
       准闭解残差(峡谷底), 供与 COMSOL 对照(见文件头)。"""
     cache = {}
-    rr = lambda a, b: _safe_res(a, b, s_c, p, nstep, cache)
+    psi_lo = math.pi/2.0 + 0.05
+    psi_hi = math.pi/2.0 + 1.46
+    rr = lambda a, b: (_safe_res(a, b, s_c, p, nstep, cache)
+                       if psi_lo <= b <= psi_hi else None)
     Nsb = p*RC    # 特征膜力尺度(贴壁环向平衡 N_phi~-p*R_c, R_c=61.5 mm; 同量级替换旧参考圆估计)
 
     if prev is not None:
@@ -434,8 +500,8 @@ def solve_fixed_sc(s_c, p, nstep, prev=None,
     if prev is not None:
         Ns_lo = min(Ns_lo, 0.4*prev[0]); Ns_hi = max(Ns_hi, 2.0*prev[0])
     ns = [Ns_lo*(Ns_hi/Ns_lo)**(i/(nNs-1)) for i in range(nNs)]
-    psid = [0.05 + 1.46*i/(npsi-1) for i in range(npsi)]   # psi = pi/2 - psid
-    psis = [math.pi/2.0 - d for d in psid]
+    psid = [0.05 + 1.46*i/(npsi-1) for i in range(npsi)]   # psi = pi/2 + psid
+    psis = [math.pi/2.0 + d for d in psid]
     pts = []
     for a in ns:
         for b in psis:
@@ -466,7 +532,7 @@ def solve_fixed_sc(s_c, p, nstep, prev=None,
         for _ in range(zoom_rounds):
             f = 0.30*max(1.0, cx[0]/Nsb)
             nsa = [cx[0]*(1.0-0.12), cx[0]*(1.0+0.12)]
-            psa = [max(cx[1]-0.045, 0.02), min(cx[1]+0.045, math.pi/2.0-1e-4)]
+            psa = [max(cx[1]-0.045, psi_lo), min(cx[1]+0.045, psi_hi)]
             if psa[1] - psa[0] < 2e-4:
                 break
             n2, q2 = 18, 14
@@ -508,7 +574,7 @@ def postprocess(out, p):
     V = abs(0.5*math.pi*V)
     E = 0.0
     for i in range(len(S)-1):
-        r0m = 0.5*(ref_r0(S[i]) + ref_r0(S[i+1]))
+        r0m = 0.5*(ref_r0_local(S[i]) + ref_r0_local(S[i+1]))
         l1m = 0.5*(lam1[i]+lam1[i+1]); l2m = 0.5*(lam2[i]+lam2[i+1])
         I1 = l1m**2 + l2m**2 + (1.0/(l1m*l2m))**2
         W = C10*(I1-3.0) + C20*(I1-3.0)**2 + C30*(I1-3.0)**3
@@ -516,18 +582,21 @@ def postprocess(out, p):
     E *= 2.0
     qq = q[1:cs+1]
     return dict(p=p, sc=out['sc_eff'], zc=max(z[:cs+1]) if cs > 0 else 0.0,
-                Ns0=Ns[0], psi_c=None, z_end=out['res'][0], cos_end=out['res'][1],
+                Ns0=Ns[0], psi_c=out['psi_c'], z_end=out['res'][0],
+                angle_res=out['angle_res'], cos_end=math.cos(out['psi_end']),
                 q_peel=q[cs], qmin=min(qq) if qq else 0.0,
-                r_end=r[-1], rmax=max(r), E=E, V=V,
+                psi_start=out['psi_start'], psi_end=out['psi_end'],
+                r_start=out['r_start'], r_peel=out['r_peel'], r_end=out['r_end'],
+                drds_free_start=out['drds_free_start'], rmax=max(r), E=E, V=V,
                 lam1min=min(lam1), lam1max=max(lam1), Ns_min=min(Ns))
 
 def fmt_row(d, exact):
     label = '精确闭解' if exact else '准闭解(残差见上)'
     return ('p=%7.1f Pa | s_c=%8.3f mm  z_c=%7.3f mm | Ns0=%8.2f N/m | psi_c=%6.3f rad | '
-            'z_end=%+9.4f mm  cos_end=%+9.5f | q(sc)=%8.2f Pa | '
+            'z_end=%+9.4f mm  angle_res=%+9.5f  cos_end=%+9.5f | q(sc)=%8.2f Pa | '
             'r_end=%7.2f mm | E_mem=%8.5f J  V=%7.3fe-5 m^3 | Ns_min=%8.2f N/m  %s'
             % (d['p'], d['sc']*1e3, d['zc']*1e3, d['Ns0'], d['psi_c'],
-               d['z_end']*1e3, d['cos_end'], d['q_peel'], d['r_end']*1e3,
+               d['z_end']*1e3, d['angle_res'], d['cos_end'], d['q_peel'], d['r_end']*1e3,
                d['E'], d['V']*1e5, d['Ns_min'], label))
 
 def main():
@@ -541,6 +610,7 @@ def main():
     ap.add_argument('--out', type=str, default='')
     ap.add_argument('--quiet', action='store_true')
     a = ap.parse_args()
+    mapping = local_material_mapping_check()
 
     def show_cfg():
         print('== 参数 ==')
@@ -548,7 +618,11 @@ def main():
               % (C10, C20, C30, H0*1e3, RW*1e3, RC*1e3))
         print('  中面参考环: 左 r=%.2f mm | 右 r=%.2f mm | 弧 R=%.2f mm | L0=%.3f mm'
               % (R_MID_L*1e3, R_MID_R*1e3, R_MID_A*1e3, L0*1e3))
-        print('  (S 起点/贴壁段材料区间待按 COMSOL para=1 读数对位, 见文件头说明)')
+        print('  COMSOL para=1 标定: p=%.1f Pa | s_c=%.3f mm (材料总长 %.3f mm; 当前接触长 %.3f mm)'
+              % (P_COMSOL_REF, SC_COMSOL_REF*1e3, LC_MATERIAL_REF*1e3,
+                 LC_CURRENT_COMSOL*1e3))
+        print('  局部 S_hat=0 -> 全局 S=%.6f mm; 映射自检通过'
+              % (S_CONTACT_CENTER_GLOBAL*1e3))
     show_cfg()
 
     rows = []
@@ -567,7 +641,7 @@ def main():
                 for i, Sv in enumerate(out['S']):
                     seg = 'contact' if Sv <= out['sc_eff']+1e-9 else 'free'
                     w.writerow(['%.4f' % d['p'], '%.8f' % d['sc'],
-                                '%.8f' % Sv, '%.8f' % ref_r0(Sv),
+                                '%.8f' % Sv, '%.8f' % ref_r0_local(Sv),
                                 '%.8f' % out['z'][i], '%.8f' % out['r'][i],
                                 '%.8f' % out['psi'][i], '%.8f' % out['Ns'][i],
                                 '%.8f' % out['lam1'][i], '%.8f' % out['lam2'][i],
@@ -583,11 +657,11 @@ def main():
         out = integrate_half(x[0], scv, x[1], p, nstep_out)
         d = postprocess(out, p)
         d['psi_c'] = x[1]
-        exact = sol['exact'] and abs(d['z_end']) < 1e-4 and abs(d['cos_end']) < 1e-4
+        exact = sol['exact'] and abs(d['z_end']) < 1e-4 and abs(d['angle_res']) < 1e-4
         if not exact:
             print('  s_c=%8.3f mm : 无精确纯膜闭解; 准闭解残差 |z_end|=%.2e m,'
-                  ' |cos_end|=%.2e (需弯曲/CZM 补自由度, 见文件头)'
-                  % (scv*1e3, abs(d['z_end']), abs(d['cos_end'])))
+                  ' |angle_res|=%.2e rad (需弯曲/CZM 补自由度, 见文件头)'
+                  % (scv*1e3, abs(d['z_end']), abs(d['angle_res'])))
         print(' ' + fmt_row(d, exact))
         return d, dict(x=x, res=sol['res'], out=out)
 
@@ -599,7 +673,7 @@ def main():
         p = a.p
         print('== 沿贴壁弧半长 s_c 扫描(p=%g Pa; 搜索 nstep=%d, 出图 nstep=%d) =='
               % (p, a.nstep_search, a.nstep))
-        print('   未知量 (Ns0, psi_c) 使 z(L0/2)=0 且 cos(psi)=0; q(sc) 为诊断(见文件头)')
+        print('   未知量 (Ns0, psi_c) 使 z(L0/2)=0 且 psi(L0/2)=3*pi/2; q(sc) 为诊断(见文件头)')
         prev = None
         nexact = 0
         for scv in sc_list:
